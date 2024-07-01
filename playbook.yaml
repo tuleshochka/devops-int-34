@@ -1,0 +1,186 @@
+---
+- name: Int 34 Playbook
+  hosts: debian_host
+  become: yes
+  tasks:
+
+    - name: apt update
+      apt:
+#        upgrade: yes
+        update_cache: yes
+        cache_valid_time: 86400
+      become: yes
+
+    - name: install basic utils
+      ansible.builtin.apt:
+        name: "{{item}}"
+        state: present
+        update_cache: yes
+      loop:
+        - git
+        - wget
+        - curl
+        - net-tools
+        - htop
+
+    - name: create users
+      become: yes
+      block:
+
+        - name: create groups
+          ansible.builtin.group:
+            name: "{{item}}"
+            state: present
+          loop:
+            - admins
+            - users
+
+        - name: create user
+          ansible.builtin.user:
+            name: "{{item.client_name}}"
+            shell: /bin/bash/
+            groups: users
+            append: yes
+            home: "/home/{{item.home_dir}}"
+          with_items:
+            - {client_name: user, home_dir: user}
+
+        - name: create admin
+          ansible.builtin.user:
+            name: "{{item.client_name}}"
+            shell: /bin/bash/
+            groups: admins
+            append: yes
+            home: "/home/{{item.home_dir}}"
+          with_items:
+            - {client_name: admin, home_dir: admin}
+
+        - name: set maximum expiration date for password
+          ansible.builtin.user:
+            name: user
+            password_expire_max: 30
+
+        - name: set number of warning days for password expiration
+          ansible.builtin.user:
+            name: user
+            password_expire_warn: 20
+
+    - name: tuning sysctl
+      block:
+
+        - name: set network settings
+          ansible.posix.sysctl:
+            name: "{{item.name}}"
+            value: '{{item.value}}'
+          with_items:
+            - { name: net.ipv4.ip_forward, value: 0 }
+            - { name: net.ipv4.tcp_syncookies, value: 1 }
+            - { name: net.ipv4.tcp_synack_retries, value: 5 }
+            - { name: net.ipv4.conf.all.rp_filter, value: 1 }
+            - { name: net.ipv4.conf.default.rp_filter, value: 1 }
+            - { name: net.ipv4.icmp_echo_ignore_broadcasts, value: 1 }
+            - { name: net.ipv4.conf.all.accept_redirects, value: 0 }
+            - { name: net.ipv4.conf.all.send_redirects, value: 0 }
+
+    - name: configure SSH
+      block:
+        - name: disable password authentication
+          ansible.builtin.lineinfile:
+            path: /etc/ssh/sshd_config
+            state: present
+            regexp: '^#?PasswordAuthentication'
+            line: 'PasswordAuthentication no'
+            backup: yes
+
+        - name: disable PermitRootLogin
+          ansible.builtin.lineinfile:
+            path: /etc/ssh/sshd_config
+            state: present
+            regexp: '^#?PermitRootLogin'
+            line: 'PermitRootLogin no'
+            backup: yes
+
+        - name: restart SSH service
+          ansible.builtin.systemd:
+            name: ssh
+            state: restarted
+            enabled: yes
+
+        - name: check SSH configuration
+          ansible.builtin.ping:
+
+    - name: configure UFW
+      block:
+
+        - name: install UFW
+          ansible.builtin.apt:
+            name: ufw
+            state: present
+            update_cache: yes
+
+        - name: set default incoming policy to deny
+          ansible.builtin.ufw:
+            default: deny
+            direction: incoming
+
+        - name: allow SSH
+          ansible.builtin.ufw:
+            rule: allow
+            port: 22
+            proto: tcp
+
+        - name: allow HTTP
+          ansible.builtin.ufw:
+            rule: allow
+            port: 80
+            proto: tcp
+
+        - name: allow HTTPS
+          ansible.builtin.ufw:
+            rule: allow
+            port: 443
+            proto: tcp
+
+        - name: allow PostgreSQL
+          ansible.builtin.ufw:
+            rule: allow
+            port: 5432
+            proto: tcp
+
+        - name: enable UFW
+          ansible.builtin.ufw:
+            state: enabled
+
+    - name: install and configure PostgreSQL 16
+      block:
+
+        - name: add key
+          ansible.builtin.apt_key:
+            url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+            state: present
+
+        - name: add apt repository
+          ansible.builtin.apt_repository:
+            repo: "deb http://apt.postgresql.org/pub/repos/apt {{ ansible_distribution_release }}-pgdg main"
+            state: present
+
+        - name: update apt
+          ansible.builtin.apt:
+            update_cache: yes
+
+        - name: install postgresql
+          ansible.builtin.apt:
+            name: postgresql-16
+            state: present
+
+        - name: check PostgreSQL service
+          service:
+            name: postgresql
+            state: started
+            enabled: true
+
+        - name: set password for the postgres user
+          become: true
+          become_user: postgres
+          ansible.builtin.command: >
+            psql -c "ALTER USER postgres PASSWORD '{{ POSTGRES_PASSWORD }}';"

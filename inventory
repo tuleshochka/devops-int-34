@@ -1,0 +1,1 @@
+debian_host ansible_host="{{DEBIAN_HOST}}" ansible_user={{DEBIAN_ANSIBLE_USER}} ansible_password={{DEBIAN_ANSIBLE_PASSWORD}}
