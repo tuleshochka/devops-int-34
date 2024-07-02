@@ -22,6 +22,7 @@
         - curl
         - net-tools
         - htop
+        - vim
 
     - name: create users
       become: yes
@@ -42,6 +43,9 @@
             groups: users
             append: yes
             home: "/home/{{item.home_dir}}"
+            generate_ssh_key: yes
+            ssh_key_bits: 2048
+            ssh_key_file: .ssh/id_rsa
           with_items:
             - {client_name: user, home_dir: user}
 
@@ -52,6 +56,9 @@
             groups: admins
             append: yes
             home: "/home/{{item.home_dir}}"
+            generate_ssh_key: yes
+            ssh_key_bits: 2048
+            ssh_key_file: .ssh/id_rsa
           with_items:
             - {client_name: admin, home_dir: admin}
 
@@ -79,8 +86,16 @@
             - { name: net.ipv4.conf.all.rp_filter, value: 1 }
             - { name: net.ipv4.conf.default.rp_filter, value: 1 }
             - { name: net.ipv4.icmp_echo_ignore_broadcasts, value: 1 }
-            - { name: net.ipv4.conf.all.accept_redirects, value: 0 }
-            - { name: net.ipv4.conf.all.send_redirects, value: 0 }
+            - { name: kernel.panic, value: 10 }
+            - { name: net.ipv4.ip_local_port_range, value: "1024 65535" }
+            - { name: net.ipv4.tcp_fastopen, value: 3 }
+            - { name: net.ipv4.tcp_keepalive_time, value: 600 }
+            - { name: net.ipv4.tcp_keepalive_probes, value: 5 }
+            - { name: net.ipv4.tcp_keepalive_intvl, value: 15 }
+            - { name: vm.swappiness, value: 10 }
+            - { name: fs.file-max, value: 2097152 }
+            - { name: kernel.printk, value: "4 4 1 7" }
+
 
     - name: configure SSH
       block:
@@ -109,7 +124,7 @@
         - name: check SSH configuration
           ansible.builtin.ping:
 
-    - name: configure UFW
+    - name: configure firewall
       block:
 
         - name: install UFW
