@@ -8,3 +8,8 @@ ansible ALL=(ALL:ALL) NOPASSWD:ALL
 ```
 ansible-playbook playbook.yaml -e @env.yaml
 ```
+После выполнения плейбука можно подключиться к postgresql командой:
+```
+psql -U postgres -h <host_ip> -p 5432
+```
+используя пароль из файла env.yaml
