@@ -4,25 +4,27 @@
   become: yes
   tasks:
 
-    - name: apt update
-      apt:
-#        upgrade: yes
-        update_cache: yes
-        cache_valid_time: 86400
-      become: yes
-
     - name: install basic utils
-      ansible.builtin.apt:
-        name: "{{item}}"
-        state: present
-        update_cache: yes
-      loop:
-        - git
-        - wget
-        - curl
-        - net-tools
-        - htop
-        - vim
+      block:
+        - name: apt update
+          apt:
+#            upgrade: yes
+            update_cache: yes
+            cache_valid_time: 86400
+          become: yes
+
+        - name: install basic utils
+          ansible.builtin.apt:
+            name: "{{item}}"
+            state: present
+            update_cache: yes
+          loop:
+            - git
+            - wget
+            - curl
+            - net-tools
+            - htop
+            - vim
 
     - name: create users
       become: yes
@@ -199,3 +201,24 @@
           become_user: postgres
           ansible.builtin.command: >
             psql -c "ALTER USER postgres PASSWORD '{{ POSTGRES_PASSWORD }}';"
+        
+        - name: change config
+          ansible.builtin.blockinfile:
+            path: /etc/postgresql/16/main/postgresql.conf
+            append_newline: true
+            prepend_newline: true
+            block: |
+              listen_addresses = '*'
+
+        - name: change hba config
+          ansible.builtin.blockinfile:
+            path: /etc/postgresql/16/main/pg_hba.conf
+            append_newline: true
+            prepend_newline: true
+            block: |
+              host all all 0.0.0.0/0 md5
+
+        - name: restart service
+          service:
+            name: postgresql
+            state: restarted
