@@ -7,3 +7,7 @@ docker build -t server .
 ```
 docker run -d -p 8000:8000 server
 ```
+Либо можно использовать docker-compose и команду:
+```
+docker-compose up -d
+```
